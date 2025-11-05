@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class SignUpScreen extends StatefulWidget {
   const SignUpScreen({super.key});
@@ -13,7 +14,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
+
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   @override
   void dispose() {
@@ -28,11 +31,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await _auth.createUserWithEmailAndPassword(
+      final userCredential = await _auth.createUserWithEmailAndPassword(
         email: _emailController.text.trim(),
         password: _passwordController.text.trim(),
       );
-      // ✅ AuthWrapper will automatically navigate to HomeScreen
+
+      if (userCredential.user != null) {
+        await _firestore.collection('users').doc(userCredential.user!.uid).set({
+          'email': _emailController.text.trim(),
+          'role': 'user',
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
     } on FirebaseAuthException catch (e) {
       String message = 'An error occurred';
       if (e.code == 'weak-password') message = 'Password is too weak.';
@@ -61,7 +71,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
-                      labelText: 'Email', border: OutlineInputBorder()),
+                    labelText: 'Email',
+                    border: OutlineInputBorder(),
+                  ),
                   keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) return 'Enter email';
@@ -74,20 +86,28 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   controller: _passwordController,
                   obscureText: true,
                   decoration: const InputDecoration(
-                      labelText: 'Password', border: OutlineInputBorder()),
+                    labelText: 'Password',
+                    border: OutlineInputBorder(),
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) return 'Enter password';
-                    if (value.length < 6) return 'Password must be at least 6 characters';
+                    if (value.length < 6) {
+                      return 'Password must be at least 6 characters';
+                    }
                     return null;
                   },
                 ),
                 const SizedBox(height: 20),
                 ElevatedButton(
                   onPressed: _isLoading ? null : _signup,
-                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(50),
+                  ),
                   child: _isLoading
                       ? const CircularProgressIndicator(
-                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white))
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        )
                       : const Text('Sign Up'),
                 ),
               ],
